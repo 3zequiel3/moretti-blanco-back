@@ -16,6 +16,7 @@ lib/
 lib64/
 parts/
 sdist/
-.env
+.env*
 uploads/*
 uploads/
+Dockerfile

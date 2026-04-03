@@ -6,6 +6,7 @@ import os
 from uuid import uuid4
 from app.models.datos_contacto import DatosContacto
 from app.schemas.datos_contacto_schema import *
+from app.core.storage import get_uploads_root, is_local_storage
 
 
 """
@@ -32,6 +33,9 @@ def _to_public_image_url(path: str) -> str:
 
 
 def _save_contact_photo(file: UploadFile) -> str:
+    if not is_local_storage():
+        raise RuntimeError("Carga de archivos con STORAGE_BACKEND=s3 aun no implementada")
+
     file_ext = Path(file.filename).suffix.lower() if file.filename else ""
 
     if file_ext not in ALLOWED_EXTENSIONS:
@@ -39,8 +43,7 @@ def _save_contact_photo(file: UploadFile) -> str:
             f"Extensión no permitida. Solo se permiten: {', '.join(ALLOWED_EXTENSIONS)}"
         )
 
-    base_dir = Path(__file__).parent.parent.parent  # /app
-    upload_dir = base_dir / "uploads" / "contacto"
+    upload_dir = get_uploads_root() / "contacto"
     upload_dir.mkdir(parents=True, exist_ok=True)
 
     unique_filename = f"{uuid4()}{file_ext}"

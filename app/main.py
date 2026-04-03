@@ -5,6 +5,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 import os
 from pathlib import Path
+from app.core.storage import ensure_storage_runtime_is_valid, is_local_storage, get_uploads_root
 
 # Setear ENVIRONMENT si no está configurada
 if "ENVIRONMENT" not in os.environ:
@@ -29,16 +30,17 @@ def _get_allowed_origins() -> list[str]:
 ALLOWED_ORIGINS = _get_allowed_origins()
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    ensure_storage_runtime_is_valid()
     create_db_and_tables()
     yield
     print("Lifespan ended")
 
 app = FastAPI(lifespan=lifespan)
 
-base_dir = Path(__file__).resolve().parent.parent
-uploads_dir = base_dir / "uploads"
-uploads_dir.mkdir(parents=True, exist_ok=True)
-app.mount("/uploads", StaticFiles(directory=str(uploads_dir)), name="uploads")
+if is_local_storage():
+    uploads_dir = get_uploads_root()
+    uploads_dir.mkdir(parents=True, exist_ok=True)
+    app.mount("/uploads", StaticFiles(directory=str(uploads_dir)), name="uploads")
 
 app.add_middleware(
     CORSMiddleware,

@@ -6,6 +6,7 @@ import os
 from uuid import uuid4
 from app.models.ultimos_trabajos import UltimosTrabajos
 from app.schemas.ultimos_trabajos_schema import *
+from app.core.storage import get_uploads_root, is_local_storage
 
 """
 UltimosTrabajos Service
@@ -28,6 +29,9 @@ def _to_public_image_url(path: str) -> str:
     return path
 
 def _save_image(file: UploadFile) -> str:
+    if not is_local_storage():
+        raise RuntimeError("Carga de archivos con STORAGE_BACKEND=s3 aun no implementada")
+
     file_ext = Path(file.filename).suffix.lower() if file.filename else ""
 
     if file_ext not in ALLOWED_EXTENSIONS:
@@ -35,8 +39,7 @@ def _save_image(file: UploadFile) -> str:
             f"Extensión no permitida. Solo se permiten: {', '.join(ALLOWED_EXTENSIONS)}"
         )
 
-    base_dir = Path(__file__).parent.parent.parent  # /app
-    upload_dir = base_dir / "uploads" / "ultimos_trabajos"
+    upload_dir = get_uploads_root() / "ultimos_trabajos"
     upload_dir.mkdir(parents=True, exist_ok=True)
 
     unique_filename = f"{uuid4()}{file_ext}"

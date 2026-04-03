@@ -6,6 +6,7 @@ import shutil
 from pathlib import Path
 import os
 from uuid import uuid4
+from app.core.storage import get_uploads_root, is_local_storage
 
 
 """
@@ -34,6 +35,9 @@ def _to_public_image_url(path: str) -> str:
 Crear un nuevo slice del carrousel
 """
 def create_carrousel(db:Session, descripcion:str, orden:int, file:UploadFile):
+    if not is_local_storage():
+        raise RuntimeError("Carga de archivos con STORAGE_BACKEND=s3 aun no implementada")
+
     # Validar extensión de archivo permitida
     ALLOWED_EXTENSIONS = {'.jpg', '.jpeg', '.png', '.gif', '.webp'}
     file_ext = Path(file.filename).suffix.lower()
@@ -41,9 +45,7 @@ def create_carrousel(db:Session, descripcion:str, orden:int, file:UploadFile):
     if file_ext not in ALLOWED_EXTENSIONS:
         raise ValueError(f"Extensión no permitida. Solo se permiten: {', '.join(ALLOWED_EXTENSIONS)}")
     
-    # Usar ruta absoluta basada en el directorio de la app
-    base_dir = Path(__file__).parent.parent.parent  # /app
-    upload_dir = base_dir / "uploads" / "carrousel"
+    upload_dir = get_uploads_root() / "carrousel"
     upload_dir.mkdir(parents=True, exist_ok=True)
     
     # Generar nombre único para evitar sobrescrituras
