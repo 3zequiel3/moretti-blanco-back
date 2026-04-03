@@ -20,3 +20,4 @@ sdist/
 uploads/*
 uploads/
 Dockerfile
+./Dockerfile
