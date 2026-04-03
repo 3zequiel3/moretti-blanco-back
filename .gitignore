@@ -17,3 +17,5 @@ lib64/
 parts/
 sdist/
 .env
+uploads/*
+uploads/
