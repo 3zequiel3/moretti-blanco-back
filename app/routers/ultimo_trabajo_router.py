@@ -11,7 +11,7 @@ from app.routers.usuario_router import get_current_user
 ultimo_trabajo_router = APIRouter(prefix="/ultimos-trabajos", tags=["ultimos-trabajos"])
 
 
-@ultimo_trabajo_router.post("/", response_model=UltimosTrabajosRead)
+@ultimo_trabajo_router.post("", response_model=UltimosTrabajosRead)
 async def create_ultimo_trabajo_router(
     db: Session = Depends(get_session),
     titulo: str = Form(...),

@@ -1,4 +1,5 @@
 import json
+from typing import Optional
 from fastapi import APIRouter, Depends, File, UploadFile, Form, HTTPException, Header
 from sqlalchemy.orm import Session
 from app.core.database import get_session
@@ -40,14 +41,12 @@ def _parse_links_botones(raw_links: str) -> dict[str, str]:
 
     return sanitized
 
-@datos_contacto_router.get("/" ,response_model=DatosContactoRead)
+@datos_contacto_router.get("/" ,response_model=Optional[DatosContactoRead])
 async def get_all_contact_data_router(
     db: Session = Depends(get_session)
 ):
     # GET público: Sin autenticación requerida (para la página pública)
     contact_data = get_contact_data(db)
-    if contact_data is None:
-        raise HTTPException(status_code=404, detail="Datos de contacto no encontrados")
     return contact_data
 
 @datos_contacto_router.post("/", response_model=DatosContactoRead)

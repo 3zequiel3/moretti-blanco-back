@@ -12,6 +12,7 @@ class UsuarioRead(SQLModel):
     id: int
     nombre: str
     username: str
+    foto_url: Optional[str] = None
 
 
 class UsuarioUpdate(SQLModel):
@@ -25,4 +26,12 @@ class LoginRequest(SQLModel):
 
 class LoginResponse(SQLModel):
     access_token: str
+    refresh_token: str
     token_type: str = "bearer"
+    expires_in: int
+
+
+class ChangePasswordRequest(SQLModel):
+    current_password: str = Field(min_length=1, max_length=128)
+    new_password: str = Field(min_length=8, max_length=128)
+    confirm_new_password: str = Field(min_length=8, max_length=128)

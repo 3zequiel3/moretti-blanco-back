@@ -3,6 +3,7 @@ from app.core.database import create_db_and_tables
 from contextlib import asynccontextmanager
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
+import datetime 
 import os
 from pathlib import Path
 from app.core.storage import ensure_storage_runtime_is_valid, is_local_storage, get_uploads_root
@@ -17,6 +18,7 @@ from app.routers.carrousel_router import carrousel_router
 from app.routers.usuario_router import usuario_router
 from app.routers.datos_contacto_router import datos_contacto_router
 from app.routers.ultimo_trabajo_router import ultimo_trabajo_router
+from app.routers.health_router import router as health_router
 
 def _get_allowed_origins() -> list[str]:
     raw_origins = os.getenv("PUBLIC_DOMAIN", "http://localhost:5173")
@@ -50,7 +52,18 @@ app.add_middleware(
     allow_headers=["*"]
 )
 
+@app.get("/")
+def root():
+    """Root health check endpoint."""
+    return {
+        "message": "Moretti Blanco Backend",
+        "status": "running",
+        "version": "1.0",
+        "timestamp": datetime.datetime.utcnow().isoformat()
+    }
+
 app.include_router(carrousel_router)
 app.include_router(usuario_router)
 app.include_router(datos_contacto_router)
 app.include_router(ultimo_trabajo_router)
+app.include_router(health_router)

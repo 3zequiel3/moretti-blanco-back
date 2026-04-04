@@ -6,3 +6,4 @@ class Usuario(SQLModel,table=True):
     nombre: str
     username: str
     password_hash: str
+    foto_url: Optional[str] = None

@@ -1,8 +1,13 @@
 from jose import jwt, JWTError
 from datetime import datetime, timedelta
 from app.models.usuarios import Usuario
+from fastapi import UploadFile
+from pathlib import Path
+from uuid import uuid4
+import shutil
 import os
 from pwdlib import PasswordHash
+from app.core.storage import get_uploads_root, is_local_storage
 
 password_hash = PasswordHash.recommended()
 
@@ -16,7 +21,10 @@ def _get_secret_key() -> str:
 
 SECRET_KEY = _get_secret_key()
 ALGORITHM = "HS256"
-ACCESS_TOKEN_EXPIRE_MINUTES = 30
+ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "30"))
+REFRESH_TOKEN_EXPIRE_DAYS = int(os.getenv("REFRESH_TOKEN_EXPIRE_DAYS", "30"))
+BACKEND_PUBLIC_URL = os.getenv("BACKEND_PUBLIC_URL", "http://localhost:8080").rstrip("/")
+ALLOWED_IMG_EXTENSIONS = {".jpg", ".jpeg", ".png", ".gif", ".webp"}
 
 
 def hash_password(password: str) -> str:
@@ -25,11 +33,45 @@ def hash_password(password: str) -> str:
 def verify_password(plain_password: str, hashed_password: str) -> bool:
     return password_hash.verify(plain_password, hashed_password)
 
-def create_token(data: dict):
+def _create_token(data: dict, expires_delta: timedelta, token_type: str) -> str:
     payload = data.copy()
-    expire = datetime.utcnow() + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
-    payload.update({"exp": expire})
+    expire = datetime.utcnow() + expires_delta
+    payload.update({"exp": expire, "type": token_type})
     return jwt.encode(payload, SECRET_KEY, algorithm=ALGORITHM)
+
+def create_access_token(data: dict) -> str:
+    return _create_token(
+        data,
+        timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES),
+        "access",
+    )
+
+def create_refresh_token(data: dict) -> str:
+    return _create_token(
+        data,
+        timedelta(days=REFRESH_TOKEN_EXPIRE_DAYS),
+        "refresh",
+    )
+
+def create_token(data: dict):
+    # Compatibilidad hacia atrás con llamadas existentes.
+    return create_access_token(data)
+
+def create_token_pair(data: dict) -> tuple[str, str]:
+    return create_access_token(data), create_refresh_token(data)
+
+def verify_access_token(token: str) -> dict:
+    payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+    token_type = payload.get("type")
+    if token_type not in (None, "access"):
+        raise JWTError("Invalid token type")
+    return payload
+
+def verify_refresh_token(token: str) -> dict:
+    payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+    if payload.get("type") != "refresh":
+        raise JWTError("Invalid token type")
+    return payload
 
 def verify_token(token: str) -> dict:
     """
@@ -40,8 +82,7 @@ def verify_token(token: str) -> dict:
         JWTError: Si token es inválido, expirado o formato incorrecto
     """
     try:
-        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
-        return payload
+        return verify_access_token(token)
     except JWTError as e:
         raise JWTError(f"Invalid or expired token: {str(e)}")
 
@@ -60,3 +101,131 @@ def create_usuario_service(db, usuario):
         raise e
     db.refresh(db_usuario)
     return db_usuario
+
+
+def _to_public_image_url(path: str | None) -> str | None:
+    if not path:
+        return path
+
+    if path.startswith("http://") or path.startswith("https://"):
+        return path
+
+    if path.startswith("/uploads/"):
+        return f"{BACKEND_PUBLIC_URL}{path}"
+
+    marker = "/uploads/"
+    if marker in path:
+        return f"{BACKEND_PUBLIC_URL}{path[path.index(marker):]}"
+
+    return path
+
+
+def save_profile_photo(file: UploadFile) -> str:
+    if not is_local_storage():
+        raise RuntimeError("Carga de archivos con STORAGE_BACKEND=s3 aun no implementada")
+
+    if not file.filename:
+        raise ValueError("Archivo vacío")
+
+    file_ext = Path(file.filename).suffix.lower()
+    if file_ext not in ALLOWED_IMG_EXTENSIONS:
+        raise ValueError(
+            f"Extensión no permitida. Solo se permiten: {', '.join(ALLOWED_IMG_EXTENSIONS)}"
+        )
+
+    upload_dir = get_uploads_root() / "usuarios"
+    upload_dir.mkdir(parents=True, exist_ok=True)
+
+    unique_filename = f"{uuid4()}{file_ext}"
+    file_path = upload_dir / unique_filename
+    public_image_url = f"/uploads/usuarios/{unique_filename}"
+
+    try:
+        with file_path.open("wb") as buffer:
+            shutil.copyfileobj(file.file, buffer)
+    except Exception as e:
+        if file_path.exists():
+            os.remove(file_path)
+        raise RuntimeError(f"Error guardando foto: {str(e)}")
+
+    return _to_public_image_url(public_image_url)
+
+
+def create_usuario_service_with_photo(db, usuario, photo_file: UploadFile | None = None):
+    hashed_password = hash_password(usuario.password)
+    photo_url = None
+
+    if photo_file is not None and photo_file.filename:
+        photo_url = save_profile_photo(photo_file)
+
+    db_usuario = Usuario(
+        nombre=usuario.nombre,
+        username=usuario.username,
+        password_hash=hashed_password,
+        foto_url=photo_url,
+    )
+    try:
+        db.add(db_usuario)
+        db.commit()
+    except Exception as e:
+        db.rollback()
+        raise e
+    db.refresh(db_usuario)
+    return db_usuario
+
+
+def update_usuario_profile(
+    db,
+    usuario: Usuario,
+    nombre: str | None = None,
+    username: str | None = None,
+    photo_file: UploadFile | None = None,
+):
+    changed = False
+
+    if nombre is not None:
+        usuario.nombre = nombre
+        changed = True
+
+    if username is not None and username != usuario.username:
+        existing = db.query(Usuario).filter(Usuario.username == username, Usuario.id != usuario.id).first()
+        if existing:
+            raise ValueError("Username ya existe")
+        usuario.username = username
+        changed = True
+
+    if photo_file is not None and photo_file.filename:
+        usuario.foto_url = save_profile_photo(photo_file)
+        changed = True
+
+    if changed:
+        try:
+            db.add(usuario)
+            db.commit()
+        except Exception as e:
+            db.rollback()
+            raise e
+        db.refresh(usuario)
+
+    usuario.foto_url = _to_public_image_url(usuario.foto_url)
+    return usuario
+
+
+def change_password_service(db, usuario: Usuario, current_password: str, new_password: str):
+    if not verify_password(current_password, usuario.password_hash):
+        raise ValueError("Contraseña actual incorrecta")
+
+    if verify_password(new_password, usuario.password_hash):
+        raise ValueError("La nueva contraseña debe ser distinta a la actual")
+
+    usuario.password_hash = hash_password(new_password)
+
+    try:
+        db.add(usuario)
+        db.commit()
+    except Exception as e:
+        db.rollback()
+        raise e
+
+    db.refresh(usuario)
+    return usuario
