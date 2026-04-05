@@ -58,6 +58,55 @@ def get_s3_presigned_expires_seconds() -> int:
     return max(60, min(expires, 7 * 24 * 60 * 60))
 
 
+def _build_storage_object_key(folder: str, original_filename: str | None) -> tuple[str, str]:
+    file_ext = Path(original_filename or "").suffix.lower()
+    clean_folder = folder.strip().strip("/")
+
+    if not clean_folder:
+        raise ValueError("folder no puede ser vacío")
+
+    if not file_ext:
+        raise ValueError("El archivo debe tener una extensión válida")
+
+    unique_filename = f"{uuid4()}{file_ext}"
+    relative_storage_path = f"{clean_folder}/{unique_filename}"
+    object_key = f"{get_s3_key_prefix()}/{relative_storage_path}" if get_s3_key_prefix() else relative_storage_path
+    return object_key, f"/uploads/{relative_storage_path}"
+
+
+def create_s3_presigned_upload_target(
+    *,
+    folder: str,
+    original_filename: str | None,
+    content_type: str | None = None,
+) -> dict[str, str]:
+    if not is_s3_storage():
+        raise RuntimeError("STORAGE_BACKEND debe ser s3 para generar presigned upload URLs")
+
+    object_key, storage_path = _build_storage_object_key(folder, original_filename)
+
+    params: dict[str, str] = {
+        "Bucket": _get_required_env("S3_BUCKET_NAME"),
+        "Key": object_key,
+    }
+
+    if content_type:
+        params["ContentType"] = content_type
+
+    s3_client = _build_s3_client()
+    upload_url = s3_client.generate_presigned_url(
+        "put_object",
+        Params=params,
+        ExpiresIn=get_s3_presigned_expires_seconds(),
+    )
+
+    return {
+        "upload_url": upload_url,
+        "storage_path": storage_path,
+        "object_key": object_key,
+    }
+
+
 def get_s3_public_base_url() -> str:
     explicit_base = os.getenv("S3_PUBLIC_BASE_URL", "").strip().rstrip("/")
     if explicit_base:

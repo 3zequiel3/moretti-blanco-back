@@ -26,6 +26,37 @@ class UltimosTrabajosUpdate(SQLModel):
     imagenes: Optional[list[dict]] = None
     comentarios: Optional[str] = None
 
+
+class UltimosTrabajosImageRef(SQLModel):
+    url: str
+    nombre: Optional[str] = None
+
+
+class UltimosTrabajosDirectCreate(SQLModel):
+    titulo: str
+    descripcion: str
+    imagenes: list[UltimosTrabajosImageRef] = Field(default_factory=list)
+    comentarios: Optional[str] = None
+
+
+class UltimosTrabajosDirectUpdate(SQLModel):
+    titulo: Optional[str] = None
+    descripcion: Optional[str] = None
+    imagenes: Optional[list[UltimosTrabajosImageRef]] = None
+    comentarios: Optional[str] = None
+
+
+class UploadTarget(SQLModel):
+    upload_url: str
+    storage_path: str
+    object_key: str
+
+
+class UploadTargetRequest(SQLModel):
+    folder: str
+    original_filename: str
+    content_type: Optional[str] = None
+
 class UltimosTrabajosUpdateImagenes(SQLModel):
     imagenes: list[dict] = Field(default_factory=list, sa_column=Column(JSON))
 

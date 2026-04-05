@@ -1,6 +1,7 @@
 from fastapi import UploadFile
 from sqlmodel import Session, select
 import os
+from sqlalchemy import desc
 from app.models.ultimos_trabajos import UltimosTrabajos
 from app.schemas.ultimos_trabajos_schema import *
 from app.core.storage import resolve_storage_url, save_uploaded_file
@@ -11,6 +12,19 @@ UltimosTrabajos Service
 
 BACKEND_PUBLIC_URL = os.getenv("BACKEND_PUBLIC_URL", "http://localhost:8080").rstrip("/")
 ALLOWED_EXTENSIONS = {'.jpg', '.jpeg', '.png', '.gif', '.webp'}
+
+
+def _normalize_image_reference(image: dict) -> dict:
+    url = image.get("url") if isinstance(image, dict) else None
+    nombre = image.get("nombre") if isinstance(image, dict) else None
+
+    if not url:
+        raise ValueError("Cada imagen requiere url")
+
+    return {
+        "url": url,
+        "nombre": nombre or "imagen",
+    }
 
 def _to_public_image_url(path: str) -> str:
     resolved = resolve_storage_url(path)
@@ -53,11 +67,29 @@ def create_ultimo_trabajo(db: Session, titulo: str, descripcion: str, imagenes: 
         except ValueError as e:
             print(f"Error al guardar la imagen {imagen.filename}: {e}")
 
+    return create_ultimo_trabajo_from_images(
+        db=db,
+        titulo=titulo,
+        descripcion=descripcion,
+        imagenes=imagen_dicts,
+        comentarios=comentarios,
+    )
+
+
+def create_ultimo_trabajo_from_images(
+    db: Session,
+    titulo: str,
+    descripcion: str,
+    imagenes: list[dict],
+    comentarios: Optional[str] = None,
+):
+    imagen_dicts = [_normalize_image_reference(image) for image in imagenes]
+
     nuevo_trabajo = UltimosTrabajos(
         titulo=titulo,
         descripcion=descripcion,
         imagenes=imagen_dicts,
-        comentarios=comentarios
+        comentarios=comentarios,
     )
     try:
         db.add(nuevo_trabajo)
@@ -69,7 +101,11 @@ def create_ultimo_trabajo(db: Session, titulo: str, descripcion: str, imagenes: 
     return nuevo_trabajo
 
 def get_ultimos_trabajos_active(db: Session):
-    trabajos = db.exec(select(UltimosTrabajos).where(UltimosTrabajos.is_active == True).order_by(UltimosTrabajos.created_at.desc())).all()
+    trabajos = db.exec(
+        select(UltimosTrabajos)
+        .where(UltimosTrabajos.is_active == True)
+        .order_by(desc(UltimosTrabajos.created_at))
+    ).all()
     for trabajo in trabajos:
         if trabajo.imagenes:
             trabajo.imagenes = [{
@@ -88,7 +124,7 @@ def get_ultimo_trabajo_by_id(db: Session, trabajo_id: int):
     return trabajo
 
 def get_ultimos_trabajos_all(db: Session):
-    trabajos = db.exec(select(UltimosTrabajos).order_by(UltimosTrabajos.created_at.desc())).all()
+    trabajos = db.exec(select(UltimosTrabajos).order_by(desc(UltimosTrabajos.created_at))).all()
     for trabajo in trabajos:
         if trabajo.imagenes:
             trabajo.imagenes = [{
@@ -130,6 +166,35 @@ def update_ultimo_trabajo(
             except ValueError as e:
                 print(f"Error al guardar la imagen {imagen.filename}: {e}")
         trabajo.imagenes = imagen_dicts
+
+    return _persist_ultimo_trabajo(db, trabajo)
+
+
+def update_ultimo_trabajo_from_images(
+    db: Session,
+    ul_trabajo_id: int,
+    titulo: Optional[str] = None,
+    descripcion: Optional[str] = None,
+    comentarios: Optional[str] = None,
+    imagenes: Optional[list[dict]] = None,
+):
+    trabajo = db.get(UltimosTrabajos, ul_trabajo_id)
+    if not trabajo:
+        return None
+
+    if titulo is not None:
+        trabajo.titulo = titulo
+    if descripcion is not None:
+        trabajo.descripcion = descripcion
+    if comentarios is not None:
+        trabajo.comentarios = comentarios
+    if imagenes is not None:
+        trabajo.imagenes = [_normalize_image_reference(image) for image in imagenes]
+
+    return _persist_ultimo_trabajo(db, trabajo)
+
+
+def _persist_ultimo_trabajo(db: Session, trabajo: UltimosTrabajos):
     
     try:
         db.add(trabajo)
