@@ -3,11 +3,9 @@ from datetime import datetime, timedelta
 from app.models.usuarios import Usuario
 from fastapi import UploadFile
 from pathlib import Path
-from uuid import uuid4
-import shutil
 import os
 from pwdlib import PasswordHash
-from app.core.storage import get_uploads_root, is_local_storage
+from app.core.storage import save_uploaded_file
 
 password_hash = PasswordHash.recommended()
 
@@ -121,31 +119,18 @@ def _to_public_image_url(path: str | None) -> str | None:
 
 
 def save_profile_photo(file: UploadFile) -> str:
-    if not is_local_storage():
-        raise RuntimeError("Carga de archivos con STORAGE_BACKEND=s3 aun no implementada")
-
     if not file.filename:
         raise ValueError("Archivo vacío")
 
-    file_ext = Path(file.filename).suffix.lower()
-    if file_ext not in ALLOWED_IMG_EXTENSIONS:
-        raise ValueError(
-            f"Extensión no permitida. Solo se permiten: {', '.join(ALLOWED_IMG_EXTENSIONS)}"
-        )
-
-    upload_dir = get_uploads_root() / "usuarios"
-    upload_dir.mkdir(parents=True, exist_ok=True)
-
-    unique_filename = f"{uuid4()}{file_ext}"
-    file_path = upload_dir / unique_filename
-    public_image_url = f"/uploads/usuarios/{unique_filename}"
-
     try:
-        with file_path.open("wb") as buffer:
-            shutil.copyfileobj(file.file, buffer)
+        public_image_url = save_uploaded_file(
+            file_obj=file.file,
+            original_filename=file.filename,
+            folder="usuarios",
+            allowed_extensions=ALLOWED_IMG_EXTENSIONS,
+            content_type=file.content_type,
+        )
     except Exception as e:
-        if file_path.exists():
-            os.remove(file_path)
         raise RuntimeError(f"Error guardando foto: {str(e)}")
 
     return _to_public_image_url(public_image_url)
