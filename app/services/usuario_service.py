@@ -109,6 +109,9 @@ def _to_public_image_url(path: str | None) -> str | None:
     if not resolved:
         return path
 
+    if resolved.startswith("http://") or resolved.startswith("https://"):
+        return resolved
+
     if resolved.startswith("/uploads/"):
         return f"{BACKEND_PUBLIC_URL}{resolved}"
 
@@ -134,7 +137,7 @@ def save_profile_photo(file: UploadFile) -> str:
     except Exception as e:
         raise RuntimeError(f"Error guardando foto: {str(e)}")
 
-    return _to_public_image_url(public_image_url)
+    return public_image_url
 
 
 def create_usuario_service_with_photo(db, usuario, photo_file: UploadFile | None = None):

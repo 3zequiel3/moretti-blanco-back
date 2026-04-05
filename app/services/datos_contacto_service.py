@@ -20,6 +20,9 @@ def _to_public_image_url(path: str) -> str:
     if not resolved:
         return path
 
+    if resolved.startswith("http://") or resolved.startswith("https://"):
+        return resolved
+
     if resolved.startswith("/uploads/"):
         return f"{BACKEND_PUBLIC_URL}{resolved}"
 
@@ -39,7 +42,7 @@ def _save_contact_photo(file: UploadFile) -> str:
         content_type=file.content_type,
     )
 
-    return _to_public_image_url(public_image_url)
+    return public_image_url
 
 def create_contact_data(
     db: Session,

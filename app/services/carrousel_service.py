@@ -19,6 +19,9 @@ def _to_public_image_url(path: str) -> str:
     if not resolved:
         return path
 
+    if resolved.startswith("http://") or resolved.startswith("https://"):
+        return resolved
+
     if resolved.startswith("/uploads/"):
         return f"{BACKEND_PUBLIC_URL}{resolved}"
 
@@ -43,14 +46,8 @@ def create_carrousel(db:Session, descripcion:str, orden:int, file:UploadFile):
         content_type=file.content_type,
     )
     
-    try:
-        normalized_image_url = _to_public_image_url(public_image_url)
-    except Exception as e:
-        db.rollback()
-        raise e
-    
     new_carrousel = Carrousel(
-        image_url=normalized_image_url,
+        image_url=public_image_url,
         descripcion=descripcion,
         orden=orden,
     )

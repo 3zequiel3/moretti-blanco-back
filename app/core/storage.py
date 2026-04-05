@@ -202,7 +202,7 @@ def save_uploaded_file(
         file_obj.seek(0)
         with output_file.open("wb") as buffer:
             buffer.write(file_obj.read())
-        return get_public_url_for_storage_path(relative_storage_path)
+        return f"/uploads/{relative_storage_path}"
 
     bucket = _get_required_env("S3_BUCKET_NAME")
     key_prefix = get_s3_key_prefix()
@@ -225,7 +225,7 @@ def save_uploaded_file(
     else:
         s3_client.upload_fileobj(file_obj, bucket, object_key)
 
-    return get_public_url_for_storage_path(relative_storage_path)
+    return f"/uploads/{relative_storage_path}"
 
 
 def ensure_storage_runtime_is_valid() -> None:
