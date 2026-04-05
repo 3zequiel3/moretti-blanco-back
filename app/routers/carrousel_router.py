@@ -55,12 +55,22 @@ async def create_carrousel_router(
 @carrousel_router.patch("/{carrousel_id}", response_model=CarrouselRead)
 async def update_carrousel_router(
     carrousel_id: int,
-    data: CarrouselUpdate,
+    descripcion: str = Form(...),
+    orden: int = Form(...),
+    is_active: bool = Form(True),
+    file: UploadFile | None = File(None),
     db: Session = Depends(get_session),
     current_user: Usuario = Depends(get_current_user)
 ):
     try:
-        return update_carrousel(db, carrousel_id, data)
+        return update_carrousel_with_file(
+            db,
+            carrousel_id,
+            descripcion,
+            orden,
+            is_active,
+            file,
+        )
     except Exception as exc:
         if "not found" in str(exc).lower():
             raise HTTPException(status_code=404, detail="Carrousel no encontrado") from exc

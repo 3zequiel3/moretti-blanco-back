@@ -100,6 +100,44 @@ def update_carrousel(db:Session, carrousel_id:int, data:CarrouselUpdate):
     return carrousel
 
 
+def update_carrousel_with_file(
+    db: Session,
+    carrousel_id: int,
+    descripcion: str,
+    orden: int,
+    is_active: bool,
+    file: UploadFile | None = None,
+):
+    carrousel = db.get(Carrousel, carrousel_id)
+    if not carrousel:
+        raise Exception("Carrousel not found")
+
+    carrousel.descripcion = descripcion
+    carrousel.orden = orden
+    carrousel.is_active = is_active
+
+    if file is not None and file.filename:
+        allowed_extensions = {".jpg", ".jpeg", ".png", ".gif", ".webp"}
+        carrousel.image_url = save_uploaded_file(
+            file_obj=file.file,
+            original_filename=file.filename,
+            folder="carrousel",
+            allowed_extensions=allowed_extensions,
+            content_type=file.content_type,
+        )
+
+    try:
+        db.add(carrousel)
+        db.commit()
+    except Exception as e:
+        db.rollback()
+        raise e
+
+    db.refresh(carrousel)
+    carrousel.image_url = _to_public_image_url(carrousel.image_url)
+    return carrousel
+
+
 """
 Desactivar un slice del carrousel por su id
 SOFT DELETE
