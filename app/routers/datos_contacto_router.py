@@ -41,7 +41,7 @@ def _parse_links_botones(raw_links: str) -> dict[str, str]:
 
     return sanitized
 
-@datos_contacto_router.get("/" ,response_model=Optional[DatosContactoRead])
+@datos_contacto_router.get("" ,response_model=Optional[DatosContactoRead])
 async def get_all_contact_data_router(
     db: Session = Depends(get_session)
 ):
@@ -57,7 +57,7 @@ async def get_contact_data_list_router(
     # GET publico: habilita render de multiples cards en la vista cliente.
     return get_contact_data_list(db)
 
-@datos_contacto_router.post("/", response_model=DatosContactoRead)
+@datos_contacto_router.post("", response_model=DatosContactoRead)
 async def create_contact_data_router(
     db: Session = Depends(get_session),
     nombre: str = Form(...),

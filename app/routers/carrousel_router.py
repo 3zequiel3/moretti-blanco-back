@@ -11,7 +11,7 @@ carrousel_router = APIRouter(prefix="/carrousel", tags=["carrousel"])
 
 
 
-@carrousel_router.get("/" ,response_model=list[CarrouselRead])
+@carrousel_router.get("" ,response_model=list[CarrouselRead])
 async def get_all_carrousels_router(
     db: Session = Depends(get_session)
 ):
@@ -35,7 +35,7 @@ async def get_carrousel_router(
 
 
 
-@carrousel_router.post("/", response_model=CarrouselRead)
+@carrousel_router.post("", response_model=CarrouselRead)
 async def create_carrousel_router( 
     descripcion: str = Form(...),
     orden: int = Form(...),
