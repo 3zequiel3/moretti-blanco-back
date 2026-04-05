@@ -3,7 +3,7 @@ from sqlmodel import Session, select
 import os
 from app.models.ultimos_trabajos import UltimosTrabajos
 from app.schemas.ultimos_trabajos_schema import *
-from app.core.storage import save_uploaded_file
+from app.core.storage import resolve_storage_url, save_uploaded_file
 
 """
 UltimosTrabajos Service
@@ -13,17 +13,18 @@ BACKEND_PUBLIC_URL = os.getenv("BACKEND_PUBLIC_URL", "http://localhost:8080").rs
 ALLOWED_EXTENSIONS = {'.jpg', '.jpeg', '.png', '.gif', '.webp'}
 
 def _to_public_image_url(path: str) -> str:
-    if path.startswith("http://") or path.startswith("https://"):
+    resolved = resolve_storage_url(path)
+    if not resolved:
         return path
 
-    if path.startswith("/uploads/"):
-        return f"{BACKEND_PUBLIC_URL}{path}"
+    if resolved.startswith("/uploads/"):
+        return f"{BACKEND_PUBLIC_URL}{resolved}"
 
     marker = "/uploads/"
-    if marker in path:
-        return f"{BACKEND_PUBLIC_URL}{path[path.index(marker):]}"
+    if marker in resolved:
+        return f"{BACKEND_PUBLIC_URL}{resolved[resolved.index(marker):]}"
 
-    return path
+    return resolved
 
 def _save_image(file: UploadFile) -> str:
     public_image_url = save_uploaded_file(

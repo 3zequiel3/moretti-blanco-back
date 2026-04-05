@@ -5,7 +5,7 @@ from fastapi import UploadFile
 from pathlib import Path
 import os
 from pwdlib import PasswordHash
-from app.core.storage import save_uploaded_file
+from app.core.storage import resolve_storage_url, save_uploaded_file
 
 password_hash = PasswordHash.recommended()
 
@@ -105,17 +105,18 @@ def _to_public_image_url(path: str | None) -> str | None:
     if not path:
         return path
 
-    if path.startswith("http://") or path.startswith("https://"):
+    resolved = resolve_storage_url(path)
+    if not resolved:
         return path
 
-    if path.startswith("/uploads/"):
-        return f"{BACKEND_PUBLIC_URL}{path}"
+    if resolved.startswith("/uploads/"):
+        return f"{BACKEND_PUBLIC_URL}{resolved}"
 
     marker = "/uploads/"
-    if marker in path:
-        return f"{BACKEND_PUBLIC_URL}{path[path.index(marker):]}"
+    if marker in resolved:
+        return f"{BACKEND_PUBLIC_URL}{resolved[resolved.index(marker):]}"
 
-    return path
+    return resolved
 
 
 def save_profile_photo(file: UploadFile) -> str:

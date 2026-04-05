@@ -1,10 +1,9 @@
 import os
+import importlib
 from pathlib import Path
-from typing import BinaryIO
+from typing import Any, BinaryIO
+from urllib.parse import urlparse
 from uuid import uuid4
-
-from botocore.client import BaseClient
-from botocore.config import Config
 
 
 def get_storage_backend() -> str:
@@ -40,6 +39,25 @@ def get_s3_key_prefix() -> str:
     return os.getenv("S3_UPLOAD_PREFIX", "uploads").strip().strip("/")
 
 
+def get_s3_object_acl() -> str | None:
+    acl = os.getenv("S3_OBJECT_ACL", "").strip()
+    return acl or None
+
+
+def get_s3_serve_mode() -> str:
+    raw = os.getenv("S3_SERVE_MODE", "public-url").strip().lower()
+    return raw if raw in {"public-url", "presigned"} else "public-url"
+
+
+def get_s3_presigned_expires_seconds() -> int:
+    raw = os.getenv("S3_PRESIGNED_EXPIRES_SECONDS", "3600").strip()
+    try:
+        expires = int(raw)
+    except ValueError:
+        return 3600
+    return max(60, min(expires, 7 * 24 * 60 * 60))
+
+
 def get_s3_public_base_url() -> str:
     explicit_base = os.getenv("S3_PUBLIC_BASE_URL", "").strip().rstrip("/")
     if explicit_base:
@@ -61,9 +79,76 @@ def get_public_url_for_storage_path(relative_storage_path: str) -> str:
     return f"{get_s3_public_base_url()}/{object_key}"
 
 
-def _build_s3_client() -> BaseClient:
+def _extract_s3_object_key_from_path(path: str) -> str | None:
+    raw = (path or "").strip()
+    if not raw:
+        return None
+
+    bucket = os.getenv("S3_BUCKET_NAME", "").strip()
+
+    if raw.startswith("http://") or raw.startswith("https://"):
+        parsed = urlparse(raw)
+        raw = parsed.path
+
+    normalized = raw.lstrip("/")
+    if bucket and normalized.startswith(f"{bucket}/"):
+        normalized = normalized[len(bucket) + 1 :]
+
+    if normalized.startswith("uploads/"):
+        return normalized
+
+    if raw.startswith("/uploads/"):
+        relative = raw[len("/uploads/") :]
+        key_prefix = get_s3_key_prefix()
+        return f"{key_prefix}/{relative}" if key_prefix else relative
+
+    return normalized or None
+
+
+def resolve_storage_url(path: str | None) -> str | None:
+    if not path:
+        return path
+
+    if is_local_storage():
+        if path.startswith("http://") or path.startswith("https://"):
+            return path
+
+        if path.startswith("/uploads/"):
+            return path
+
+        marker = "/uploads/"
+        if marker in path:
+            return path[path.index(marker) :]
+
+        return path
+
+    if get_s3_serve_mode() == "presigned":
+        bucket = _get_required_env("S3_BUCKET_NAME")
+        object_key = _extract_s3_object_key_from_path(path)
+        if not object_key:
+            return path
+
+        s3_client = _build_s3_client()
+        return s3_client.generate_presigned_url(
+            "get_object",
+            Params={"Bucket": bucket, "Key": object_key},
+            ExpiresIn=get_s3_presigned_expires_seconds(),
+        )
+
+    if path.startswith("http://") or path.startswith("https://"):
+        return path
+
+    if path.startswith("/uploads/"):
+        return get_public_url_for_storage_path(path[len("/uploads/") :])
+
+    return path
+
+
+def _build_s3_client() -> Any:
     try:
-        import boto3
+        boto3 = importlib.import_module("boto3")
+        botocore_config = importlib.import_module("botocore.config")
+        Config = botocore_config.Config
     except ImportError as exc:
         raise RuntimeError(
             "STORAGE_BACKEND=s3 requiere boto3 instalado. "
@@ -126,6 +211,12 @@ def save_uploaded_file(
     extra_args: dict[str, str] | None = None
     if content_type:
         extra_args = {"ContentType": content_type}
+
+    object_acl = get_s3_object_acl()
+    if object_acl:
+        if extra_args is None:
+            extra_args = {}
+        extra_args["ACL"] = object_acl
 
     file_obj.seek(0)
     s3_client = _build_s3_client()
