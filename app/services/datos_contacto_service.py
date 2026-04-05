@@ -55,11 +55,19 @@ def _save_contact_photo(file: UploadFile) -> str:
 
     return _to_public_image_url(public_image_url)
 
-def create_contact_data(db: Session, nombre: str, telefono: str, file: UploadFile, links_botones: dict):
+def create_contact_data(
+    db: Session,
+    nombre: str,
+    cargo: str | None,
+    telefono: str,
+    file: UploadFile,
+    links_botones: dict,
+):
     public_image_url = _save_contact_photo(file)
 
     new_contact_data = DatosContacto(
         nombre=nombre,
+        cargo=cargo,
         telefono=telefono,
         foto_url=public_image_url,
         links_botones=links_botones
@@ -78,6 +86,18 @@ def get_contact_data(db: Session):
     if contact_data and contact_data.foto_url:
         contact_data.foto_url = _to_public_image_url(contact_data.foto_url)
     return contact_data
+
+
+def get_contact_data_list(db: Session):
+    contact_data_list = db.exec(select(DatosContacto).order_by(DatosContacto.id)).all()
+    normalized: list[DatosContacto] = []
+
+    for contact in contact_data_list:
+        if contact.foto_url:
+            contact.foto_url = _to_public_image_url(contact.foto_url)
+        normalized.append(contact)
+
+    return normalized
 
 def update_contact_data(db: Session, contact_data_id: int, data: DatosContactoUpdate):
     contact_data = db.get(DatosContacto, contact_data_id)

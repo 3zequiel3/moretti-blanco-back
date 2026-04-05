@@ -18,6 +18,7 @@ async def create_ultimo_trabajo_router(
     descripcion: str = Form(...),
     imagenes: list[UploadFile] = File(...),
     comentarios: Optional[str] = Form(None),
+    puntuacion: Optional[int] = Form(None, ge=1, le=5),
     current_user: Usuario = Depends(get_current_user)
 ):
     return create_ultimo_trabajo(db, titulo, descripcion, imagenes, comentarios)
@@ -87,26 +88,19 @@ async def deactivate_ultimo_trabajo_router(
         raise HTTPException(status_code=404, detail="Trabajo no encontrado")
     return updated_trabajo
 
-@ultimo_trabajo_router.post("/{trabajo_id}/rate", response_model=UltimosTrabajosRead)
-async def update_puntuacion_ultimo_trabajo_router(
+@ultimo_trabajo_router.post("/{trabajo_id}/encuesta", response_model=UltimosTrabajosRead)
+async def encuesta_ultimo_trabajo_router(
     trabajo_id: int,
     puntuacion: int = Form(..., ge=1, le=5),
+    comentarios: str = Form(..., min_length=3, max_length=1200),
     db: Session = Depends(get_session),
-    current_user: Usuario = Depends(get_current_user)
 ):
-    updated_trabajo = rate_ultimo_trabajo(db, trabajo_id, puntuacion)
-    if not updated_trabajo:
-        raise HTTPException(status_code=404, detail="Trabajo no encontrado")
-    return updated_trabajo
-
-@ultimo_trabajo_router.post("/comment", response_model=float)
-async def comment_ultimo_trabajo_router(
-    trabajo_id: int = Form(...),
-    comentario: str = Form(...),
-    db: Session = Depends(get_session),
-    current_user: Usuario = Depends(get_current_user)
-):
-    updated_trabajo = comment_ultimo_trabajo(db, trabajo_id, comentario)
+    updated_trabajo = enviar_encuesta_ultimo_trabajo(
+        db,
+        trabajo_id,
+        puntuacion,
+        comentarios,
+    )
     if not updated_trabajo:
         raise HTTPException(status_code=404, detail="Trabajo no encontrado")
     return updated_trabajo

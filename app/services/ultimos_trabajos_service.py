@@ -179,34 +179,32 @@ def activate_ultimo_trabajo(db: Session, ul_trabajo_id: int):
     db.refresh(trabajo)
     return trabajo
 
-def comment_ultimo_trabajo(db: Session, ul_trabajo_id: int, comentario: str):
+def enviar_encuesta_ultimo_trabajo(
+    db: Session,
+    ul_trabajo_id: int,
+    puntuacion: int,
+    comentarios: str,
+):
     trabajo = db.get(UltimosTrabajos, ul_trabajo_id)
     if not trabajo:
         return None
-    trabajo.comentarios = comentario
-    try:
-        db.add(trabajo)
-        db.commit()
-    except Exception as e:
-        db.rollback()
-        raise e
-    db.refresh(trabajo)
-    return trabajo
 
-def rate_ultimo_trabajo(db: Session, ul_trabajo_id: int, puntuacion: int):
-    trabajo = db.get(UltimosTrabajos, ul_trabajo_id)
-    if puntuacion < 1 or puntuacion > 5:
-        raise ValueError("La puntuación debe estar entre 1 y 5")
-    if not trabajo:
-        return None
     trabajo.puntuacion = puntuacion
+    trabajo.comentarios = comentarios.strip()
+
     try:
         db.add(trabajo)
         db.commit()
     except Exception as e:
         db.rollback()
         raise e
+
     db.refresh(trabajo)
+    if trabajo.imagenes:
+        trabajo.imagenes = [
+            {**img, "url": _to_public_image_url(img.get("url", ""))}
+            for img in trabajo.imagenes
+        ]
     return trabajo
 
 

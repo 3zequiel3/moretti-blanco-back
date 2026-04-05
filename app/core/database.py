@@ -45,6 +45,25 @@ def _ensure_schema_compatibility(engine) -> None:
             conn.commit()
             print("✓ Columna 'foto_url' agregada en tabla 'usuario'")
 
+        cargo_exists = conn.execute(
+            text(
+                """
+                SELECT 1
+                FROM INFORMATION_SCHEMA.COLUMNS
+                WHERE TABLE_SCHEMA = :schema
+                  AND TABLE_NAME = 'datoscontacto'
+                  AND COLUMN_NAME = 'cargo'
+                LIMIT 1
+                """
+            ),
+            {"schema": DATABASE_NAME},
+        ).scalar()
+
+        if not cargo_exists:
+            conn.execute(text("ALTER TABLE `datoscontacto` ADD COLUMN `cargo` VARCHAR(255) NULL"))
+            conn.commit()
+            print("✓ Columna 'cargo' agregada en tabla 'datoscontacto'")
+
 def create_db_and_tables():
     """Crea la BD y las tablas basadas en los modelos"""
     last_error = None

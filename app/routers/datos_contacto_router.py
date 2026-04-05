@@ -49,10 +49,19 @@ async def get_all_contact_data_router(
     contact_data = get_contact_data(db)
     return contact_data
 
+
+@datos_contacto_router.get("/list", response_model=list[DatosContactoRead])
+async def get_contact_data_list_router(
+    db: Session = Depends(get_session)
+):
+    # GET publico: habilita render de multiples cards en la vista cliente.
+    return get_contact_data_list(db)
+
 @datos_contacto_router.post("/", response_model=DatosContactoRead)
 async def create_contact_data_router(
     db: Session = Depends(get_session),
     nombre: str = Form(...),
+    cargo: str = Form(""),
     telefono: str = Form(...),
     file: UploadFile = File(...),
     links_botones: str = Form(...),
@@ -61,7 +70,14 @@ async def create_contact_data_router(
     links_botones_dict = _parse_links_botones(links_botones)
 
     try:
-        return create_contact_data(db, nombre, telefono, file, links_botones_dict)
+        return create_contact_data(
+            db,
+            nombre,
+            cargo.strip() or None,
+            telefono,
+            file,
+            links_botones_dict,
+        )
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 

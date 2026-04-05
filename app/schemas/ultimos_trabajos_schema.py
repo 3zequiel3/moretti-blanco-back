@@ -31,3 +31,12 @@ class UltimosTrabajosUpdateImagenes(SQLModel):
 
 class UltimosTrabajosActive(SQLModel):
     is_active: bool = Field(default=True)
+
+class UltimosTrabajosRanking(SQLModel):
+    puntuacion: int = Field(default=1, ge=1, le=5)
+    comentarios: Optional[str] = None
+
+
+class UltimosTrabajosEncuesta(SQLModel):
+    puntuacion: int = Field(..., ge=1, le=5)
+    comentarios: str = Field(..., min_length=3, max_length=1200)
